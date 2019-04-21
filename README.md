@@ -29,7 +29,7 @@ The hub can send values to an MQTT server. We use the following topics:
 
 *   `[owner_id]/hub/[hub_id]/status` (JSON dictionary with wifi, firmware, etc. info from hub)
 *   `[owner_id]/hub/[hub_id]/config` (JSON dictionary with polling rate, firmware updates, etc.)
-*   `[owner_id]/hub/[hub_id]/devices` (JSON list of device info dictionaries)
+*   `[owner_id]/hub/[hub_id]/devices` (JSON dictionary of device info by device_id)
 *   `[owner_id]/hub/[hub_id]/sensors` (JSON dictionary with sensor values (from hub) by component_id)
 *   `[owner_id]/hub/[hub_id]/actuators` (JSON dictionary with actuator values (for hub) by component_id)
 *   `[owner_id]/device/[device_id]` (string value of current hub_id for this device)
