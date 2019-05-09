@@ -108,8 +108,8 @@ class Hub(object):
 
 
 class Device(object):
-    def __init__(self, components):  # components should be a list of dictionaries
-        self.id = random.randint(1, 0xffffffff)
+    def __init__(self, id, components):  # components should be a list of dictionaries
+        self.id = id
         self.components = components
         for c in self.components:
             c['id'] = '%x-%s' % (self.id, c['type'][:5])  # construct a component ID using device ID and component type
@@ -119,9 +119,11 @@ class Device(object):
 # create hub and devices
 config = hjson.loads(open('config.hjson').read())
 hub = Hub(config)
-for components in config['devices']:
-    device = Device(components)
+for device_info in config['devices']:
+    device = Device(device_info['id'], device_info['components'])
     hub.add_device(device)
+if 'polling_interval' in config:
+    hub.polling_interval = int(config['polling_interval'])
 
 
 # connect to the MQTT service (broker)
