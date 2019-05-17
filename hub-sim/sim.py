@@ -74,7 +74,7 @@ class Hub(object):
             }
             device_infos[d.id] = device_info
             topic_name = '%s/device/%s' % (self.owner_id, d.id)
-            self.mqttc.publish(topic_name, json.dumps(self.id), qos=1)  # send hub ID for this device
+            self.mqttc.publish(topic_name, self.id, qos=1)  # send hub ID for this device
         topic_name = '%s/hub/%s/devices' % (self.owner_id, self.id)
         self.mqttc.publish(topic_name, json.dumps(device_infos), qos=1)  # send list of device info dictionaries
 
