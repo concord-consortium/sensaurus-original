@@ -1,12 +1,12 @@
 #include "Sensaur.h"
 #include "EEPROM.h"
-#include "util/crc16.h"
+#include "CheckStream.h"
 
 
 // parse a message sent using the sensaur serial protocol
 // returns number of args or -1 if error (e.g. checksum error)
 // note: parts of the message will get overwritten during parsing
-byte parseMessage(char *message, char **command, char *args[], byte maxArgs) {
+byte parseMessage(char *message, char **command, char *args[], byte maxArgs, char separator) {
 	*command = message;
 	int pos = 0;
 	int argCount = 0;
@@ -19,7 +19,7 @@ byte parseMessage(char *message, char **command, char *args[], byte maxArgs) {
 				args[0] = message + pos + 1;
 			}
 			argCount++;
-		} else if (c == ',') {
+		} else if (c == separator) {
 			message[pos] = 0;
 			if (argCount < maxArgs) {
 				args[argCount] = message + pos + 1;
@@ -32,7 +32,7 @@ byte parseMessage(char *message, char **command, char *args[], byte maxArgs) {
 				return -1;
 			}
 		}
-		crc = _crc_ccitt_update(crc, c);
+		crc = crc16_update(crc, c);
 		pos++;
 	}
 	return argCount;
@@ -123,7 +123,7 @@ bool checksumOk(char *message, bool removeChecksum) {
 			uint16_t crcGiven = strtol(message + index + 1, 0, 16);
 			return crcGiven == crc;
 		}
-		crc = _crc_ccitt_update(crc, c);
+		crc = crc16_update(crc, c);
 		index++;
 	}
 	return false;

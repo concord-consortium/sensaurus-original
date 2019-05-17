@@ -1,10 +1,12 @@
 #ifndef _CHECK_STREAM_H_
 #define _CHECK_STREAM_H_
 #include "Arduino.h"
-#include "util/crc16.h"
 
 
 // this library is based on code from Modular Science
+
+
+uint16_t crc16_update(uint16_t crc, uint16_t data);
 
 
 class CheckStream : public Stream {
@@ -24,7 +26,7 @@ public:
 			m_empty = true;  // reset
 			m_crc = 0xffff;
 		} else {
-			m_crc = _crc_ccitt_update(m_crc, data);
+			m_crc = crc16_update(m_crc, data);
 			m_empty = false;
 		}
 		return m_stream.write(data);

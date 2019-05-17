@@ -6,7 +6,7 @@
 // parse a message sent using the sensaur serial protocol
 // returns number of args or -1 if error (e.g. checksum error)
 // note: parts of the message will get overwritten during parsing
-byte parseMessage(char *message, char **command, char *args[], byte maxArgs);
+byte parseMessage(char *message, char **command, char *args[], byte maxArgs, char seperator=',');
 
 
 // configure the RGB LED pins and display a startup sequence using the LED
