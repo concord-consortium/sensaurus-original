@@ -1,5 +1,8 @@
 #include "AWS_IOT.h"
 #include "WiFi.h"
+#include "NTPClient.h"
+#include "WiFiUdp.h"
+#include "ArduinoJson.h"
 #include "HubSerial.h"
 #include "CheckStream.h"
 #include "Sensaur.h"
@@ -85,6 +88,10 @@ unsigned long lastPollTime = 0;
 Device devices[MAX_DEVICE_COUNT];
 int ledPin[MAX_DEVICE_COUNT] = {LED_PIN_1, LED_PIN_2, LED_PIN_3, LED_PIN_4, LED_PIN_5, LED_PIN_6};
 AWS_IOT awsConn;
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP);
+unsigned long lastEpochSeconds = 0;  // seconds since epoch start (from NTP)
+unsigned long lastTimeUpdate = 0;  // msec since boot
 
 
 // run once on startup
@@ -124,15 +131,22 @@ void setup() {
   if (config.wifiEnabled) {
     if (awsConn.connect(HOST_ADDRESS, CLIENT_ID, aws_root_ca_pem, certificate_pem_crt, private_pem_key) == 0) {
       Serial.println("connected to AWS");
+      String topicName = String(config.ownerId) + "/hub/" + config.hubId + "/config";
+      if (awsConn.subscribe(topicName.c_str(), configHandler)) {
+        Serial.println("failed to subscribe to config topic");
+        freezeWithError();
+      }
     } else {
       Serial.println("failed to connect to AWS");
-      while (true) {
-        setStatusLED(HIGH);
-        delay(1000);
-        setStatusLED(LOW);
-        delay(1000);
-      }
+      freezeWithError();
     }
+  }
+
+  // get network time
+  if (config.wifiEnabled) {
+    timeClient.begin();
+    timeClient.setTimeOffset(0);  // we want UTC
+    updateTime();
   }
   Serial.println("ready");
 }
@@ -171,10 +185,10 @@ void loop() {
   }
 
   // send current sensor values to server
+  unsigned long time = millis();
   if (sendInterval) {
-    unsigned long time = millis();
     if (time - lastSendTime > sendInterval) {
-      sendValues();
+      sendSensorValues(time);
       if (lastSendTime) {
         lastSendTime += sendInterval;  // increment send time so we don't drift
       } else {
@@ -190,6 +204,11 @@ void loop() {
   if (configMode) {
     ledcWrite(0, (millis() >> 3) & 255);  // fade LED when in config mode
   }
+
+  // get network time once an hour
+  if (time - lastTimeUpdate > 1000 * 60 * 60) {
+    updateTime();
+  }
 }
 
 
@@ -203,6 +222,24 @@ void doPolling() {
       devStream[i].println('m');  // request metadata if not yet received
     }
     waitForResponse(i);
+  }
+}
+
+
+// handle an incoming MQTT message
+void configHandler(char *topicName, int payloadLen, char *payLoad) {
+  DynamicJsonDocument doc(256);
+  deserializeJson(doc, payLoad);
+  sendInterval = round(1000.0 * doc["send_interval"].as<float>());
+  if (sendInterval < 1000) {
+    pollInterval = 500;
+  } else {
+    pollInterval = 1000;
+  }
+  String firmwareUpdate = doc["firmware_update"];
+  if (firmwareUpdate.length()) {
+    Serial.print("firmware update: ");
+    Serial.println(firmwareUpdate);
   }
 }
 
@@ -268,8 +305,14 @@ void processMessageFromDevice(int deviceIndex) {
   char *args[MAX_COMPONENT_COUNT + 1];
   if (deviceMessage[0] == 'v') {  // values
     int argCount = parseMessage(deviceMessage, &command, args, MAX_COMPONENT_COUNT + 1);
-
-    // send device value
+    int argIndex = 0;
+    for (int i = 0; i < dev.componentCount(); i++) {
+      Component &c = dev.component(i);
+      if (c.dir() == 'i' && argIndex < argCount) {
+        c.setValue(args[argIndex]);
+        argIndex++;
+      }
+    }
     
   } else if (deviceMessage[0] == 'm') {  // metadata
     int argCount = parseMessage(deviceMessage, &command, args, MAX_COMPONENT_COUNT + 1, ';');
@@ -329,6 +372,20 @@ void processByteFromComputer(char c) {
 }
 
 
+void sendStatus() {
+  DynamicJsonDocument doc(256);
+  doc["wifi_network"] = WIFI_SSID;
+  doc["wifi_password"] = WIFI_PASSWORD;
+  doc["host"] = HOST_ADDRESS;
+  String topicName = String(config.ownerId) + "/hub/" + config.hubId + "/status";
+  String message;
+  serializeJson(doc, message);
+  if (awsConn.publish(topicName.c_str(), message.c_str())) {
+    Serial.println("error publishing");
+  }
+}
+
+
 void sendDeviceInfo() {
   String json = "{";
   bool first = true;
@@ -366,7 +423,27 @@ void sendDeviceInfo() {
 }
 
 
-void sendValues() {
+void sendSensorValues(unsigned long time) {
+  DynamicJsonDocument doc(512);
+  doc["time"] = ((double) (time - lastTimeUpdate) / 1000.0) + (double) lastEpochSeconds;
+  for (int i = 0; i < MAX_DEVICE_COUNT; i++) {
+    Device &d = devices[i];
+    if (d.connected()) {
+      for (int j = 0; j < d.componentCount(); j++) {
+        Component &c = d.component(j);
+        if (c.dir() == 'i') {
+          String compId = String(d.id()) + '-' + c.idSuffix();
+          doc[compId] = c.value();
+        }
+      }
+    }
+  }
+  String topicName = String(config.ownerId) + "/hub/" + config.hubId + "/sensors";
+  String message;
+  serializeJson(doc, message);
+  if (awsConn.publish(topicName.c_str(), message.c_str())) {
+    Serial.println("error publishing");
+  }
 }
 
 
@@ -397,6 +474,38 @@ void setStatusLED(int state) {
     ledcWrite(0, 255);
   } else {
     ledcWrite(0, 0);
+  }
+}
+
+
+void updateTime() {
+
+  // get new time from network
+  int counter = 0;
+  while (!timeClient.update()) {
+    timeClient.forceUpdate();
+    delay(1000);
+    counter++;
+    if (counter > 10) {
+      break;  // failed; try again later
+    }
+  }
+
+  lastTimeUpdate = millis();
+  lastEpochSeconds = timeClient.getEpochTime();
+  if (config.consoleEnabled) {
+    Serial.print("updated time: ");
+    Serial.println(lastEpochSeconds);
+  }
+}
+
+
+void freezeWithError() {
+  while (true) {
+    setStatusLED(HIGH);
+    delay(1000);
+    setStatusLED(LOW);
+    delay(1000);
   }
 }
 
