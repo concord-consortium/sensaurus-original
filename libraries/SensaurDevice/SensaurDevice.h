@@ -8,13 +8,36 @@
 
 class Component {
 public:
+
 	Component();
+
+	// the current value (for sensors)
+	// we represent values as strings so as not to worry about gaining/losing decimal places
+	const char *value() const { return m_value; }
+	void setValue(const char *value);
+
+	// info received from the device
+	// e.g.: "i,CO2,K-30,PPM"
 	void setInfo(const char *info);
+	char dir() const { return m_dir; };
+
+	// retrieve the component info as a JSON string
 	String infoJson();
+
+	// retrieve the type-based ID suffix for this component
+	const char *idSuffix() const { return m_idSuffix; }
+
 private:
 
-	// we keep the info string in unparsed form, since otherwise it would take a lot of memory; could reconsider this (the ESP32 probably has plenty of RAM)
-	char m_info[64];  // e.g. i,CO2,K-30,PPM
+	// current state
+	char m_value[10];
+
+	// info from the device
+	char m_dir;
+	char m_type[20];
+	char m_model[20];
+	char m_units[20];
+	char m_idSuffix[6];
 };
 
 
