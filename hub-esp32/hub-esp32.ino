@@ -10,9 +10,6 @@
 #include "config.h"
 
 
-// note: some AWS IoT code based on https://github.com/jandelgado/esp32-aws-iot
-
-
 #define MAX_DEVICE_COUNT 6
 #define CONSOLE_BAUD 9600
 #define DEV_BAUD 38400
@@ -83,7 +80,7 @@ byte deviceMessageIndex = 0;
 bool configMode = false;
 unsigned long sendInterval = 0;
 unsigned long lastSendTime = 0;
-unsigned long pollInterval = 0;
+unsigned long pollInterval = 1000;
 unsigned long lastPollTime = 0;
 Device devices[MAX_DEVICE_COUNT];
 int ledPin[MAX_DEVICE_COUNT] = {LED_PIN_1, LED_PIN_2, LED_PIN_3, LED_PIN_4, LED_PIN_5, LED_PIN_6};
@@ -128,13 +125,15 @@ void setup() {
   setStatusLED(HIGH);
 
   // connect to AWS MQTT
+  // note: some AWS IoT code based on https://github.com/jandelgado/esp32-aws-iot
   if (config.wifiEnabled) {
     if (awsConn.connect(HOST_ADDRESS, CLIENT_ID, aws_root_ca_pem, certificate_pem_crt, private_pem_key) == 0) {
       Serial.println("connected to AWS");
       String topicName = String(config.ownerId) + "/hub/" + config.hubId + "/config";
       if (awsConn.subscribe(topicName.c_str(), configHandler)) {
-        Serial.println("failed to subscribe to config topic");
-        freezeWithError();
+        Serial.print("failed to subscribe to config topic: ");
+        Serial.println(topicName);
+        //freezeWithError();
       }
     } else {
       Serial.println("failed to connect to AWS");
@@ -148,6 +147,9 @@ void setup() {
     timeClient.setTimeOffset(0);  // we want UTC
     updateTime();
   }
+
+  // send current status
+  sendStatus();
   Serial.println("ready");
 }
 
@@ -176,7 +178,7 @@ void loop() {
     time = millis();
     for (int i = 0; i < MAX_DEVICE_COUNT; i++) {
       Device &d = devices[i];
-      if (time - d.lastMessageTime() > pollInterval * 2) {
+      if (d.connected() && time - d.lastMessageTime() > pollInterval * 2) {
         d.setConnected(false);
         digitalWrite(ledPin[i], LOW);
         sendDeviceInfo();
@@ -348,8 +350,9 @@ void processByteFromComputer(char c) {
       if (consoleMessage[0] == 'p') {  // poll all the devices for their current values
         Serial.println("polling");
         doPolling();
-      } else if (consoleMessage[0] == 'P') {  // start polling once a second
+      } else if (consoleMessage[0] == 's') {  // start sending sensor values once a second
         pollInterval = 1000;
+        sendInterval = 1000;
       } else if (consoleMessageIndex > 2 && consoleMessage[1] == '>') {  // send a message to a specific device
         int deviceIndex = consoleMessage[0] - '0';
         if (config.consoleEnabled) {
@@ -373,6 +376,9 @@ void processByteFromComputer(char c) {
 
 
 void sendStatus() {
+  if (config.consoleEnabled) {
+    Serial.print("sending status: ");
+  }
   DynamicJsonDocument doc(256);
   doc["wifi_network"] = WIFI_SSID;
   doc["wifi_password"] = WIFI_PASSWORD;
@@ -380,15 +386,24 @@ void sendStatus() {
   String topicName = String(config.ownerId) + "/hub/" + config.hubId + "/status";
   String message;
   serializeJson(doc, message);
-  if (awsConn.publish(topicName.c_str(), message.c_str())) {
-    Serial.println("error publishing");
+  if (config.wifiEnabled) {
+    if (awsConn.publish(topicName.c_str(), message.c_str())) {
+      Serial.println("error publishing");
+    }
+  }
+  if (config.consoleEnabled) {
+    Serial.println("done");
   }
 }
 
 
 void sendDeviceInfo() {
+  if (config.consoleEnabled) {
+    Serial.print("sending device info: ");
+  }
   String json = "{";
   bool first = true;
+  int deviceCount = 0;
   for (int i = 0; i < MAX_DEVICE_COUNT; i++) {
     Device &dev = devices[i];
     if (dev.connected()) {
@@ -412,6 +427,7 @@ void sendDeviceInfo() {
           Serial.println("error publishing");
         }
       }
+      deviceCount++;
     }
   }
   String topicName = String(config.ownerId) + "/hub/" + config.hubId + "/devices";
@@ -420,12 +436,21 @@ void sendDeviceInfo() {
       Serial.println("error publishing");    
     }
   }
+  if (config.consoleEnabled) {
+    Serial.print(deviceCount);
+    Serial.println(" devices");
+  }
 }
 
 
 void sendSensorValues(unsigned long time) {
+  if (config.consoleEnabled) {
+    Serial.print("sending values: ");
+  }
+  int valueCount = 0;
   DynamicJsonDocument doc(512);
-  doc["time"] = ((double) (time - lastTimeUpdate) / 1000.0) + (double) lastEpochSeconds;
+  String wallTime = String(((double) (time - lastTimeUpdate) / 1000.0) + (double) lastEpochSeconds);  // convert to string since json code doesn't seem to handle doubles correctly
+  doc["time"] = wallTime;
   for (int i = 0; i < MAX_DEVICE_COUNT; i++) {
     Device &d = devices[i];
     if (d.connected()) {
@@ -434,6 +459,7 @@ void sendSensorValues(unsigned long time) {
         if (c.dir() == 'i') {
           String compId = String(d.id()) + '-' + c.idSuffix();
           doc[compId] = c.value();
+          valueCount++;
         }
       }
     }
@@ -441,8 +467,15 @@ void sendSensorValues(unsigned long time) {
   String topicName = String(config.ownerId) + "/hub/" + config.hubId + "/sensors";
   String message;
   serializeJson(doc, message);
-  if (awsConn.publish(topicName.c_str(), message.c_str())) {
-    Serial.println("error publishing");
+  if (config.wifiEnabled) {
+    if (awsConn.publish(topicName.c_str(), message.c_str())) {
+      Serial.println("error publishing");
+    }
+  }
+  if (config.consoleEnabled) {
+    Serial.print(valueCount);
+    Serial.print(" values at ");
+    Serial.println(wallTime);
   }
 }
 
