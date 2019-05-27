@@ -15,7 +15,7 @@ class Hub(object):
         self.owner_id = config['owner_id']
         self.config = config
         self.id = config['hub_id']
-        self.polling_interval = None
+        self.send_interval = None
         self.status_sent = False
 
     # connect to the MQTT service (broker)
@@ -38,9 +38,9 @@ class Hub(object):
     def on_message(self, client, userdata, msg):
         if msg.topic.endswith('config'):
             message = json.loads(msg.payload)
-            if 'polling_interval' in message:
-                self.polling_interval = message['polling_interval']
-                print('polling interval: %.2f seconds' % self.polling_interval)
+            if 'send_interval' in message:
+                self.send_interval = message['send_interval']
+                print('send interval: %.2f seconds' % self.send_interval)
             if 'firmware_url' in message:
                 print('firmware update: %s' % message['firmware_url'])
         elif msg.topic.endswith('actuators'):
@@ -81,6 +81,7 @@ class Hub(object):
     # send sensor values from devices connected to this hub
     def send_sensor_values(self):
         values = {}
+        values['time'] = int(time.time())
         for d in self.devices:
             for c in d.components:
                 if c['dir'] == 'i':
@@ -88,20 +89,20 @@ class Hub(object):
                     values[c['id']] = '%.2f' % value
         topic_name = '%s/hub/%s/sensors' % (self.owner_id, self.id)
         self.mqttc.publish(topic_name, json.dumps(values), qos=1)
-        print('sending %d sensor values' % len(values))
+        print('sending %d sensor values to %s' % (len(values) - 1, topic_name))
 
-    # simulate a polling loop
+    # send simulated data
     def run(self):
         while True:
-            if self.polling_interval:
-                time.sleep(self.polling_interval)  # not quite going to match polling interval, but that's ok for this simulation
+            if self.send_interval:
+                time.sleep(self.send_interval)  # not quite going to match send interval, but that's ok for this simulation
             else:
                 time.sleep(0.5)
             if self.connected:
                 if not self.status_sent:
                     self.send_status()
                     self.send_device_info()
-                if self.polling_interval:
+                if self.send_interval:
                     self.send_sensor_values()
             else:
                 print('waiting for connection...')
@@ -122,8 +123,8 @@ hub = Hub(config)
 for device_info in config['devices']:
     device = Device(device_info['id'], device_info['components'])
     hub.add_device(device)
-if 'polling_interval' in config:
-    hub.polling_interval = int(config['polling_interval'])
+if 'send_interval' in config:
+    hub.send_interval = int(config['send_interval'])
 
 
 # connect to the MQTT service (broker)

@@ -7,7 +7,7 @@ cert_path: cert/thing-certificate.pem.crt
 key_path: cert/thing-private.pem.key
 
 # simulation info
-polling_interval: 2
+send_interval: 2
 devices: [
 	{
 		id: 10001
