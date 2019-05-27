@@ -25,7 +25,7 @@ a single device.)
 
 ## MQTT topics
 
-The hub can send values to an MQTT server. We use the following topics:
+The hub can communicate with an MQTT server. We use the following topics:
 
 *   `[owner_id]/hub/[hub_id]/status` (JSON dictionary with wifi, firmware, etc. info from hub)
 *   `[owner_id]/hub/[hub_id]/config` (JSON dictionary with polling rate, firmware updates, etc.)
@@ -33,6 +33,20 @@ The hub can send values to an MQTT server. We use the following topics:
 *   `[owner_id]/hub/[hub_id]/sensors` (JSON dictionary with sensor values (from hub) by component_id)
 *   `[owner_id]/hub/[hub_id]/actuators` (JSON dictionary with actuator values (for hub) by component_id)
 *   `[owner_id]/device/[device_id]` (string value of current hub_id for this device)
+
+## Installing ESP32 software
+
+1.  Install Arduino IDE
+2.  Go to Arduino IDE preferences; set `Additional Board Manager URLs` to `https://dl.espressif.com/dl/package_esp32_index.json`
+3.  Go to `Tools` / `Board` / `Board Manager...`, search for `esp32`, select result and click `Install`
+
+## Uploading to ESP32
+
+1.  Plug in the ESP32 board
+2.  Select `DOIT ESP32 DEVKIT V1` from board list (or other board type if needed)
+3.  Select serial port
+4.  Press ctrl-U (or command-U) to upload.
+5.  After IDE shows `Connecting...`, push `BOOT` button on ESP32 for several seconds (until upload starts).
 
 ## Running the hub simulator
 
