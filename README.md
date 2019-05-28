@@ -40,18 +40,27 @@ The hub can communicate with an MQTT server. We use the following topics:
 2.  Go to Arduino IDE preferences; set `Additional Board Manager URLs` to `https://dl.espressif.com/dl/package_esp32_index.json`
 3.  Go to `Tools` / `Board` / `Board Manager...`, search for `esp32`, select result and click `Install`
 
+## Compiling the code
+
+1.  Go to Arduino IDE preferences and set the `Sketchbook location` to the `sensaur-arduino` folder. This allows the IDE to find the required libraries.
+2.  (Restart Arduino IDE?)
+3.  Press Ctrl-R (or Command-R) to compile. It may take a little while given the various library dependencies.
+
 ## Uploading to ESP32
 
 1.  Plug in the ESP32 board
 2.  Select `DOIT ESP32 DEVKIT V1` from board list (or other board type if needed)
 3.  Select serial port
-4.  Press ctrl-U (or command-U) to upload.
+4.  Press Ctrl-U (or Command-U) to upload.
 5.  After IDE shows `Connecting...`, push `BOOT` button on ESP32 for several seconds (until upload starts).
 
 ## Running the hub simulator
 
-The simulator is in the `sensaur-hub-sim` folder. 
+The simulator is in the `hub-sim` folder. 
 
-1.  Create a sub-folder called `cert` containing the key and certificates for this hub.
-2.  Copy `sample_config.hjson` to `config.hjson` and edit the host, certificate paths, etc. as needed.
-3.  Run `sim.py`
+1.  Use pip to install `hjson` and `paho-mqtt`.
+2.  Use the AWS IoT web interface to create a new "thing." Get the certificates and host name from the web interface.
+3.  Create a sub-folder called `cert` in `hub-sim` containing the key and certificates for this hub.
+4.  Copy `sample_config.hjson` to `config.hjson` and edit the host, certificate paths, etc. as needed.
+    (You can leave the `owner_id` and `hub_id` as is for now.)
+5.  Run `sim.py`
