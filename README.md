@@ -1,10 +1,7 @@
-# sensaur-arduino
+# sensaurus
 
-The repository contains Arduino/ESP32 code for the Sensaur project. These sketches/libraries are used for the hub board 
+The repository contains Arduino/ESP32 code for the [Sensaurus project](https://www.sensaurus.org/). These sketches/libraries are used for the hub board 
 and sensaur/actuator devices that plug into the hub board.
-
-The hub board has two forms: one that attaches to a Raspberry Pi and one that attaches to an ESP32 microcontroller.
-See the [sensaur repo](https://github.com/manylabs/sensaur) for python code that runs on the Rasbperry Pi.
 
 The device boards connect to the hub using audio cables that carry power and serial data. The communication between the hub and the devices 
 uses a single serial line for both transmitting and receiving (i.e. half-duplex serial).
@@ -42,7 +39,7 @@ The hub can communicate with an MQTT server. We use the following topics:
 
 ## Compiling the code
 
-1.  Go to Arduino IDE preferences and set the `Sketchbook location` to the `sensaur-arduino` folder. This allows the IDE to find the required libraries.
+1.  Go to Arduino IDE preferences and set the `Sketchbook location` to the `sensaurus` folder. This allows the IDE to find the required libraries.
 2.  (Restart Arduino IDE?)
 3.  Press Ctrl-R (or Command-R) to compile. It may take a little while given the various library dependencies.
 
