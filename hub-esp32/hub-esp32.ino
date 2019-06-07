@@ -71,7 +71,7 @@ byte consoleMessageIndex = 0;
 
 
 // buffer for message coming from sensor/actuator device 
-#define DEVICE_MESSAGE_BUF_LEN 80
+#define DEVICE_MESSAGE_BUF_LEN 200
 char deviceMessage[DEVICE_MESSAGE_BUF_LEN];
 byte deviceMessageIndex = 0;
 
@@ -89,6 +89,7 @@ WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP);
 unsigned long lastEpochSeconds = 0;  // seconds since epoch start (from NTP)
 unsigned long lastTimeUpdate = 0;  // msec since boot
+char configTopicName[100];  // apparently the topic name string needs to stay in memory
 
 
 // run once on startup
@@ -97,6 +98,7 @@ void setup() {
 
   // prepare serial connections
   Serial.begin(CONSOLE_BAUD);
+  Serial.println();
   Serial.println("starting");
   for (int i = 0; i < MAX_DEVICE_COUNT; i++) {
     devSerial[i].begin(DEV_BAUD);
@@ -123,17 +125,22 @@ void setup() {
     Serial.println("connected to wifi");
   }
   setStatusLED(HIGH);
-
+  
   // connect to AWS MQTT
   // note: some AWS IoT code based on https://github.com/jandelgado/esp32-aws-iot
   if (config.wifiEnabled) {
     if (awsConn.connect(HOST_ADDRESS, CLIENT_ID, aws_root_ca_pem, certificate_pem_crt, private_pem_key) == 0) {
       Serial.println("connected to AWS");
+      delay(200);  // wait a moment before subscribing
       String topicName = String(config.ownerId) + "/hub/" + config.hubId + "/config";
-      if (awsConn.subscribe(topicName.c_str(), configHandler)) {
+      strcpy(configTopicName, topicName.c_str());      
+      if (awsConn.subscribe(configTopicName, configHandler) == 0) {
+        Serial.print("subscribed to config topic: ");
+        Serial.println(configTopicName);
+      } else {
         Serial.print("failed to subscribe to config topic: ");
-        Serial.println(topicName);
-        //freezeWithError();
+        Serial.println(configTopicName);
+        freezeWithError();
       }
     } else {
       Serial.println("failed to connect to AWS");
@@ -161,6 +168,9 @@ void loop() {
   while (Serial.available()) {
     processByteFromComputer(Serial.read());
   }
+
+  // yield to other tasks to allow AWS messages to be received
+  taskYIELD();
 
   // do polling
   if (pollInterval) {
@@ -230,6 +240,9 @@ void doPolling() {
 
 // handle an incoming MQTT message
 void configHandler(char *topicName, int payloadLen, char *payLoad) {
+  if (config.consoleEnabled) {
+    Serial.println("received config");
+  }
   DynamicJsonDocument doc(256);
   deserializeJson(doc, payLoad);
   sendInterval = round(1000.0 * doc["send_interval"].as<float>());
@@ -239,7 +252,8 @@ void configHandler(char *topicName, int payloadLen, char *payLoad) {
     pollInterval = 1000;
   }
   String firmwareUpdate = doc["firmware_update"];
-  if (firmwareUpdate.length()) {
+  if (firmwareUpdate.length() && firmwareUpdate != "null") {  // not sure why undefined value is a string "null"
+    Serial.println(firmwareUpdate.length());
     Serial.print("firmware update: ");
     Serial.println(firmwareUpdate);
   }
@@ -304,7 +318,7 @@ void processMessageFromDevice(int deviceIndex) {
   
   // process the message
   char *command;
-  char *args[MAX_COMPONENT_COUNT + 1];
+  char *args[MAX_COMPONENT_COUNT + 2];  // the meta-data message has version, ID, and string per component
   if (deviceMessage[0] == 'v') {  // values
     int argCount = parseMessage(deviceMessage, &command, args, MAX_COMPONENT_COUNT + 1);
     int argIndex = 0;
@@ -317,7 +331,7 @@ void processMessageFromDevice(int deviceIndex) {
     }
     
   } else if (deviceMessage[0] == 'm') {  // metadata
-    int argCount = parseMessage(deviceMessage, &command, args, MAX_COMPONENT_COUNT + 1, ';');
+    int argCount = parseMessage(deviceMessage, &command, args, MAX_COMPONENT_COUNT + 1, ';');  // note: using semicolon as separator here
     if (argCount > 2) {
       dev.setVersion(args[0]);
       dev.setId(args[1]);
@@ -381,7 +395,7 @@ void sendStatus() {
   }
   DynamicJsonDocument doc(256);
   doc["wifi_network"] = WIFI_SSID;
-  doc["wifi_password"] = WIFI_PASSWORD;
+  // doc["wifi_password"] = WIFI_PASSWORD;  // leave out wifi password for now
   doc["host"] = HOST_ADDRESS;
   String topicName = String(config.ownerId) + "/hub/" + config.hubId + "/status";
   String message;
@@ -430,8 +444,10 @@ void sendDeviceInfo() {
       deviceCount++;
     }
   }
+  json += "}";
   String topicName = String(config.ownerId) + "/hub/" + config.hubId + "/devices";
   if (config.wifiEnabled) {
+    Serial.println(json);
     if (awsConn.publish(topicName.c_str(), json.c_str())) {  // send list of device info dictionaries
       Serial.println("error publishing");    
     }

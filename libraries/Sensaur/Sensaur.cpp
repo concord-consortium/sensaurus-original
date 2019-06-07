@@ -75,24 +75,24 @@ void ledStartUp(byte redPin, byte greenPin, byte bluePin) {
 
 
 // produce a random ID number for this board
-uint16_t randomId() {
+uint32_t randomId() {
 	int seed = 0xf000;
-	for(int i = A0; i <= A7; i++) {
+	for (int i = A0; i <= A7; i++) {
 		seed += analogRead(i);
 	}
 	randomSeed(seed);
-	return random(1, 0x10000);  // we'll avoid using zero as an ID
+	return random(1, 0x7fffffff);  // we'll avoid using zero as an ID; random function seems to be signed, so we'll limit it to 31 bits
 }
 
 
 // a marker value used to indicate that the EEPROM has a valid value in it
-#define ID_MARKER 0xD42D
+#define ID_MARKER 0xD42E
 
 
 // get this device's ID from EEPROM; generate a new one if not already stored in EEPROM
-uint16_t getDeviceId() {
+uint32_t getDeviceId() {
 	uint16_t marker = 0;
-	uint16_t id = 0;
+	uint32_t id = 0;
 	EEPROM.get(0, marker);
 	if (marker == ID_MARKER) {
 		EEPROM.get(sizeof(marker), id);

@@ -37,8 +37,6 @@ class Tester(object):
             message = json.loads(msg.payload)
             if not 'wifi_network' in message:
                 print('**** wifi_network missing from status')
-            if not 'wifi_password' in message:
-                print('**** wifi_password missing from status')
             if not 'host' in message:
                 print('**** host missing from status')
             print('status:')
@@ -67,6 +65,7 @@ class Tester(object):
                 if not self.config_sent:
                     message = {'send_interval': 1.0}
                     topic_name = '%s/hub/%s/config' % (self.config['owner_id'], self.config['hub_id'])
+                    print('sending config to %s' % topic_name)
                     self.mqttc.publish(topic_name, json.dumps(message))
                     self.config_sent = True
             else:

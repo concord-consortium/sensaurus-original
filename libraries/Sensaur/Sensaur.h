@@ -14,7 +14,7 @@ void ledStartUp(byte redPin, byte greenPin, byte bluePin);
 
 
 // get this device's ID from EEPROM; generate a new one if not already stored in EEPROM
-uint16_t getDeviceId();
+uint32_t getDeviceId();
 
 
 // returns true if the checksum on the given serial message is ok (matches the contents of the message);

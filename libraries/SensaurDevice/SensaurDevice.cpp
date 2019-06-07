@@ -23,24 +23,35 @@ void Component::setInfo(const char *info) {
 	m_dir = info[0];
 	int part = 0;
 	int pos = 0;
+	int typeStart = 0, unitsStart = 0, modelStart = 0;
 	while (info[pos]) {
 		if (info[pos] == ',') {
 			part++;
 			switch (part) {
-			case 1: strncpy(m_type, info + 1, 20); break;
-			case 2: strncpy(m_model, info + 1, 20); break;
-			case 3: strncpy(m_units, info + 1, 20); break;
+			case 1: typeStart = pos + 1; break;
+			case 2: modelStart = pos + 1; break;
+			case 3: unitsStart = pos + 1; break;
 			}
 		}
 		pos++;
+	}
+	if (modelStart) {
+		int typeLen = modelStart - typeStart - 1;
+		if (typeLen > 20) typeLen = 20;
+		int modelLen = unitsStart - modelStart - 1;
+		if (modelLen > 20) modelLen = 20;
+		strncpy(m_type, info + typeStart, typeLen);
+		strncpy(m_model, info + modelStart, modelLen);
+		strncpy(m_units, info + unitsStart, 20);
 	}
 	strncpy(m_idSuffix, m_type, 6);  // use first 5 characters of type
 }
 
 
 String Component::infoJson() {
+	char dirStr[2] = {m_dir, 0};
 	DynamicJsonDocument doc(256);
-	doc["dir"] = m_dir;
+	doc["dir"] = dirStr;
 	doc["type"] = m_type;
 	doc["model"] = m_model;
 	doc["units"] = m_units;
